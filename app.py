@@ -7,6 +7,15 @@ from bs4 import BeautifulSoup
 import re
 import numpy as np 
 import pandas as pd 
+import os
+from dotenv import load_dotenv
+from email.message import EmailMessage
+import ssl
+import smtplib
+from datetime import datetime
+
+
+load_dotenv()
 
 
 """ Intialization """
@@ -53,7 +62,7 @@ def worker_function(url):
         raise HTTPException(status_code=500, detail=f"Error accessing {url}: {str(e)}")
 
     soup = BeautifulSoup(r.text, 'html.parser')
-    regex = re.compile('.*comment.*')
+    regex = re.compile('.*body-medium-overflow-wrap.*')
     results = soup.find_all('p', {'class':regex})
     reviews = [result.text for result in results]
 
@@ -69,11 +78,48 @@ def worker_function(url):
     """ Getting the review for each review in our dataframe """
 
     df['score'] = df['reviews'].apply(lambda x: map_sentiment_score(x))
+    print(df)
 
     """ Returning the final predicted score by taking the mean and scaling it to a 10 point scheme by multiplying 2"""
     
     return df['score'].mean() * 2
 
+
+
+"""  Mail Setup """
+
+sender_email = 'rishi.gnit2025@gmail.com'
+sender_password = os.getenv('EMAIL_PASSWORD')
+
+def broadcast(keyword, ans):
+
+    email_list = [
+    'ritwiz736.hitcse2020@gmail.com',
+    'rk04011@outlook.com',
+    'dummy@gmail.com'
+    ]
+
+    for email in email_list:
+        send_mail(email, keyword, ans)
+
+
+def send_mail(receiver_email, keyword, data=None):
+
+    date = datetime.now().strftime("Date: %d/%m/%Y || Time: %H:%M:%S")
+    subject = "Check your result for the sentiment analysis!"
+    body = f"The sentiment score for {keyword.title()} is {data}. Review generated on {date}"
+
+    em = EmailMessage()
+    em['From'] = sender_email
+    em['To'] = receiver_email
+    em['Subject'] = subject
+    em.set_content(body)
+
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465, context= context) as smtp:
+        smtp.login(sender_email, sender_password)
+        smtp.sendmail(sender_email, receiver_email, em.as_string())
 
 
 """ Endpoints """
@@ -92,11 +138,12 @@ async def get_score(request : Request):
         if not keyword:
                 raise HTTPException(status_code=400, detail="Missing 'keyword' in the request body")
 
-        url = f"https://www.yelp.com/biz/{keyword}"
+        url = f"https://www.ambitionbox.com/reviews/{keyword}-reviews/"
         
         ans = worker_function(url)
+        broadcast(keyword, ans)
 
-        return {'data': ans}
+    return {'data': ans}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Invalid Keyword Provided.")
