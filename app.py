@@ -24,6 +24,7 @@ app = FastAPI()
 
 origins = [
     "http://localhost:3000",
+    "http://localhost:5500"
 ]
 
 """ Set up CORS for FastAPI """
@@ -63,7 +64,8 @@ def worker_function(url):
 
     soup = BeautifulSoup(r.text, 'html.parser')
     regex = re.compile('.*body-medium-overflow-wrap.*')
-    results = soup.find_all('p', {'class':regex})
+    # results = soup.find_all('p', {'class':regex})
+    results = soup.find_all('p')
     reviews = [result.text for result in results]
 
     if not reviews:
@@ -105,9 +107,9 @@ def broadcast(keyword, ans):
 
 def send_mail(receiver_email, keyword, data=None):
 
-    date = datetime.now().strftime("Date: %d/%m/%Y || Time: %H:%M:%S")
+    date = datetime.now().strftime("Date: %d/%m/%Y Time: %H:%M:%S")
     subject = "Check your result for the sentiment analysis!"
-    body = f"The sentiment score for {keyword.title()} is {data}. Review generated on {date}"
+    body = f"The sentiment score for {keyword.title()} is {data:.2f}. Review generated on {date}"
 
     em = EmailMessage()
     em['From'] = sender_email
@@ -129,7 +131,7 @@ async def root():
     return {"Server is running successfully!"}
 
 
-@app.get("/get_score")
+@app.post("/get_score")
 async def get_score(request : Request):
     try : 
         req_body = await request.json()
@@ -137,13 +139,12 @@ async def get_score(request : Request):
 
         if not keyword:
                 raise HTTPException(status_code=400, detail="Missing 'keyword' in the request body")
-
-        url = f"https://www.ambitionbox.com/reviews/{keyword}-reviews/"
+        url = f"https://en.wikipedia.org/wiki/{keyword}"
         
         ans = worker_function(url)
         broadcast(keyword, ans)
 
-    return {'data': ans}
+        return {'data': "{:.2f}".format(ans)}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Invalid Keyword Provided.")
